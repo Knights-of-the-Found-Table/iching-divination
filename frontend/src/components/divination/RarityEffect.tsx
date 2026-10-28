@@ -130,19 +130,28 @@ export default function RarityEffect({
     );
   }
 
-  /* 吉：卡片顶部金色渐变描边 + 卦名渐亮 */
+  /* 吉：卡片顶部金色渐变描边 + 微弱呼吸发光 + 卦名渐亮 */
   if (rarity === "吉") {
     return (
       <motion.div
         className={`relative bg-diviner card-rounded ${className}`}
         style={{
-          borderTop: "2px solid transparent",
+          borderTop: "2px solid rgba(196, 169, 125, 0.8)",
           backgroundImage:
             "linear-gradient(to bottom, rgba(196, 169, 125, 0.08), transparent 30%)",
         }}
-        initial={{ borderTopColor: "rgba(196, 169, 125, 0)" }}
-        animate={{ borderTopColor: "rgba(196, 169, 125, 0.8)" }}
-        transition={{ delay: 0.3, duration: 0.8 }}
+        animate={{
+          boxShadow: [
+            "0 0 6px rgba(196, 169, 125, 0.08)",
+            "0 0 18px rgba(196, 169, 125, 0.25)",
+            "0 0 6px rgba(196, 169, 125, 0.08)",
+          ],
+        }}
+        transition={{
+          duration: 2.8,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
       >
         {children}
       </motion.div>

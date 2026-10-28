@@ -1,53 +1,110 @@
 "use client";
 
-/**
- * 登录页面
- *
- * 卡片居中布局，提供邮箱 + 密码登录表单。
- * 密码框支持显示/隐藏切换（Eye / EyeOff 图标）。
- * 登录成功 → 跳转 /dashboard，失败 → 显示错误信息。
- *
- * TASK-009 完整实现。
- */
-
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 
-/** 简单邮箱正则 */
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-/** 手机号正则：1开头11位数字 */
 const PHONE_RE = /^1\d{10}$/;
+
+function IdentifierInput({
+  value,
+  onChange,
+  disabled,
+  hasError,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  hasError?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  const isFloating = focused || value.length > 0;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={focused && !value ? "your@email.com 或 13800138000" : ""}
+        disabled={disabled}
+        autoComplete="username"
+        autoFocus
+        className="peer w-full bg-transparent px-2 pt-5 pb-2 font-[family-name:var(--font-body)] text-base outline-none transition-all duration-300 placeholder:text-[#9b8bb8]"
+        style={{
+          color: "var(--color-text, #f6efff)",
+          borderBottom: hasError
+            ? "2px solid #ef4444"
+            : "1px solid var(--color-accent, #d9b46a)",
+        }}
+        onFocus={(event) => {
+          setFocused(true);
+          if (!hasError) {
+            event.target.style.borderBottom =
+              "2px solid var(--color-accent, #d9b46a)";
+            event.target.style.boxShadow =
+              "0 8px 18px -16px rgba(217,180,106,0.9)";
+          }
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          if (!hasError) {
+            event.target.style.borderBottom =
+              "1px solid var(--color-accent, #d9b46a)";
+            event.target.style.boxShadow = "none";
+          }
+        }}
+      />
+      <span
+        className="pointer-events-none absolute left-2 z-10 font-[family-name:var(--font-body)] text-sm transition-all duration-200"
+        style={{
+          top: isFloating ? "4px" : "18px",
+          fontSize: isFloating ? "0.7rem" : "0.9rem",
+          color: isFloating
+            ? hasError
+              ? "#ef4444"
+              : "var(--color-accent, #d9b46a)"
+            : "var(--color-text-secondary, #b8a9d6)",
+          opacity: isFloating ? 0.8 : 0.5,
+        }}
+      >
+        邮箱/手机号
+      </span>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { simpleLogin } = useAuth();
 
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [hasFieldError, setHasFieldError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /** 表单校验 */
   function validate(): string | null {
-    const emailVal = email.trim();
-    const phoneVal = phone.trim();
-    if (!emailVal && !phoneVal) return "请输入邮箱或手机号";
-    if (emailVal && !EMAIL_RE.test(emailVal)) return "邮箱格式不正确";
-    if (phoneVal && !PHONE_RE.test(phoneVal)) return "手机号格式不正确（需为1开头的11位数字）";
-    if (!password) return "请输入密码";
+    const value = identifier.trim();
+    if (!value) {
+      setHasFieldError(true);
+      return "请输入邮箱或手机号";
+    }
+    if (value.includes("@") && !EMAIL_RE.test(value)) {
+      setHasFieldError(true);
+      return "邮箱格式不正确";
+    }
+    if (!value.includes("@") && !PHONE_RE.test(value)) {
+      setHasFieldError(true);
+      return "手机号格式不正确（需为1开头的11位数字）";
+    }
+    setHasFieldError(false);
     return null;
   }
 
-  /** 提交登录 */
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
     setError(null);
 
     const validationError = validate();
@@ -58,37 +115,81 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      await login(email.trim(), password, phone.trim() || undefined);
+      await simpleLogin(identifier.trim());
       router.push("/dashboard");
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "登录失败，请稍后重试";
-      setError(message);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "进入失败，请稍后重试",
+      );
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center px-4">
+    <div
+      className="relative flex min-h-[70vh] items-center justify-center overflow-hidden px-4 py-12"
+      style={{
+        backgroundColor: "var(--color-bg, #080713)",
+        backgroundImage:
+          "radial-gradient(circle at 50% 18%, rgba(217,180,106,0.14), transparent 28%), radial-gradient(circle at 12% 82%, rgba(112,72,180,0.16), transparent 32%), linear-gradient(rgba(8,7,19,0.82), rgba(8,7,19,0.9)), url('/images/anime/velvet-bg.webp')",
+        backgroundSize: "auto, auto, auto, cover",
+        backgroundPosition: "center",
+      }}
+    >
+      <div className="pointer-events-none absolute -left-12 top-10 font-[family-name:var(--font-noto-serif)] text-[13rem] leading-none text-[#d9b46a]/[0.035] sm:left-8">
+        ☯
+      </div>
+      <div className="pointer-events-none absolute -right-16 bottom-0 font-[family-name:var(--font-noto-serif)] text-[16rem] leading-none text-[#d9b46a]/[0.03]">
+        ☯
+      </div>
       <motion.div
-        className="w-full max-w-[400px] rounded bg-diviner px-10 py-12 shadow-sm"
+        className="relative w-full max-w-[420px] overflow-hidden rounded-lg p-8 sm:p-10"
+        style={{
+          background: "var(--color-bg-card, rgba(18,14,38,0.72))",
+          border:
+            "1px solid color-mix(in srgb, var(--color-accent, #d9b46a) 38%, transparent)",
+          borderRadius: "var(--radius-md, 22px)",
+          boxShadow:
+            "0 24px 80px rgba(0,0,0,0.48), 0 0 32px rgba(217,180,106,0.12)",
+          backdropFilter: "blur(18px)",
+        }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
       >
-        {/* 标题 */}
-        <h1 className="mb-1 text-center font-[family-name:var(--font-noto-serif)] text-[36px] leading-tight text-ink">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d9b46a]/60 to-transparent" />
+        <img
+          src="/images/anime/crystal-ball.webp"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none mx-auto mb-3 h-10 w-10 object-contain opacity-90 drop-shadow-[0_0_16px_rgba(217,180,106,0.38)]"
+        />
+        <h1 className="mb-1 bg-gradient-to-b from-[#fff4c8] via-[var(--color-accent,#d9b46a)] to-[#8d6532] bg-clip-text text-center font-[family-name:var(--font-noto-serif)] text-4xl leading-tight text-transparent">
           六爻
         </h1>
-        <p className="mb-8 text-center font-[family-name:var(--font-body)] text-[18px] text-ink-light">
-          登录
+        <p
+          className="mb-8 text-center font-[family-name:var(--font-body)] text-lg"
+          style={{ color: "var(--color-text-secondary, #b8a9d6)" }}
+        >
+          登录或创建账号
+        </p>
+        <p
+          className="-mt-6 mb-6 text-center text-xs"
+          style={{
+            color: "var(--color-text-secondary, #b8a9d6)",
+            opacity: 0.6,
+          }}
+        >
+          输入邮箱或手机号即可进入
         </p>
 
-        {/* 错误信息 */}
         {error && (
           <motion.p
-            className="mb-4 rounded border border-red-300/50 bg-red-50/50 px-4 py-2 text-center text-sm text-red-600"
+            className="mb-5 rounded-md border border-red-400/40 bg-red-950/30 px-4 py-2.5 text-center text-sm"
+            style={{ color: "#fecaca" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -96,104 +197,45 @@ export default function LoginPage() {
           </motion.p>
         )}
 
-        {/* 表单 */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          {/* 邮箱 */}
-          <div className="relative">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="邮箱"
-              disabled={isSubmitting}
-              autoComplete="email"
-              className="w-full bg-transparent px-2 py-3 font-[family-name:var(--font-body)] text-ink
-                border-b border-ink-light/30
-                placeholder:text-warning
-                focus:border-gold focus:outline-none
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-colors duration-300"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <IdentifierInput
+            value={identifier}
+            onChange={setIdentifier}
+            disabled={isSubmitting}
+            hasError={hasFieldError}
+          />
 
-          {/* 手机号 */}
-          <div className="relative">
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="手机号（选填）"
-              disabled={isSubmitting}
-              autoComplete="tel"
-              className="w-full bg-transparent px-2 py-3 font-[family-name:var(--font-body)] text-ink
-                border-b border-ink-light/30
-                placeholder:text-warning
-                focus:border-gold focus:outline-none
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-colors duration-300"
-            />
-          </div>
-
-          {/* 密码 */}
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="密码"
-              disabled={isSubmitting}
-              autoComplete="current-password"
-              className="w-full bg-transparent px-2 py-3 pr-10 font-[family-name:var(--font-body)] text-ink
-                border-b border-ink-light/30
-                placeholder:text-warning
-                focus:border-gold focus:outline-none
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-colors duration-300"
-            />
-            {/* 密码显示/隐藏切换 */}
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              disabled={isSubmitting}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-warning hover:text-ink-light
-                transition-colors cursor-pointer disabled:opacity-50"
-              aria-label={showPassword ? "隐藏密码" : "显示密码"}
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-
-          {/* 登录按钮 */}
           <motion.button
             type="submit"
             disabled={isSubmitting}
-            whileHover={isSubmitting ? {} : { scale: 1.02 }}
-            whileTap={isSubmitting ? {} : { scale: 0.98 }}
-            className="mt-2 w-full rounded border border-gold py-3
-              font-[family-name:var(--font-noto-serif)] text-base text-gold
-              transition-all duration-300
-              hover:bg-gold hover:text-ivory
-              disabled:opacity-50 disabled:cursor-not-allowed
-              cursor-pointer"
+            className="mt-3 w-full cursor-pointer rounded-full py-3 font-[family-name:var(--font-noto-serif)] text-base font-semibold tracking-[0.18em] transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              border: "1px solid var(--color-accent, #d9b46a)",
+              color: "var(--color-bg, #080713)",
+              background:
+                "linear-gradient(135deg, #fff1b8 0%, var(--color-accent, #d9b46a) 48%, #8d6532 100%)",
+            }}
+            animate={{
+              boxShadow: [
+                "0 0 10px rgba(217,180,106,0.18)",
+                "0 0 24px rgba(217,180,106,0.48)",
+                "0 0 10px rgba(217,180,106,0.18)",
+              ],
+            }}
+            transition={{
+              boxShadow: { duration: 2.8, repeat: Infinity, ease: "easeInOut" },
+            }}
+            whileHover={{
+              scale: 1.03,
+              boxShadow: "0 0 32px rgba(217,180,106,0.62)",
+              backgroundColor: "var(--color-accent, #d9b46a)",
+              color: "var(--color-bg, #080713)",
+            }}
+            whileTap={{ scale: 0.97 }}
           >
-            {isSubmitting ? "登录中..." : "登 录"}
+            {isSubmitting ? "进入中..." : "进 入"}
           </motion.button>
         </form>
-
-        {/* 去注册 */}
-        <p className="mt-6 text-center text-sm text-warning">
-          还没有账号？
-          <Link
-            href="/register"
-            className="ml-1 text-ink-light underline underline-offset-2 transition-colors hover:text-gold"
-          >
-            去注册 →
-          </Link>
-        </p>
       </motion.div>
     </div>
   );

@@ -25,7 +25,8 @@ import { API_BASE } from "@/lib/constants";
 
 /** 用户信息 */
 export interface User {
-  email: string;
+  email: string | null;
+  phone: string | null;
   subscription: string;
 }
 
@@ -45,6 +46,8 @@ export interface AuthContextValue {
   remainingQuota: number;
   /** 登录：成功后将 token 存 localStorage 并拉取用户信息 */
   login: (email: string, password: string, phone?: string) => Promise<void>;
+  /** 无密码登录：账号不存在时自动创建 */
+  simpleLogin: (identifier: string) => Promise<void>;
   /** 注册：成功后自动登录 */
   register: (email: string, password: string, phone?: string) => Promise<void>;
   /** 登出：清除 token 和用户状态 */
@@ -120,7 +123,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await res.json();
       setToken(stored);
-      setUser({ email: data.email, subscription: data.subscription });
+      setUser({
+        email: data.email,
+        phone: data.phone,
+        subscription: data.subscription,
+      });
       setRemainingQuota(
         data.daily_remaining === -1 ? Infinity : data.daily_remaining
       );
@@ -164,18 +171,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (profileRes.ok) {
       const profile = await profileRes.json();
-      setUser({ email: profile.email, subscription: profile.subscription });
+      setUser({
+        email: profile.email,
+        phone: profile.phone,
+        subscription: profile.subscription,
+      });
       setRemainingQuota(
         profile.daily_remaining === -1 ? Infinity : profile.daily_remaining
       );
     } else {
       // 刚拿到的 token 却无法拉 profile（极端情况），至少设个基本 user
-      setUser({ email, subscription: "free" });
+      setUser({ email: email || null, phone: phone || null, subscription: "free" });
       setRemainingQuota(3);
     }
   },
   [],
 );
+
+  /* ── simpleLogin：登录与注册合并，无需密码 ── */
+
+  const simpleLogin = useCallback(async (identifier: string) => {
+    const res = await fetch(`${API_BASE}/api/auth/simple-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res
+        .json()
+        .catch(() => ({ detail: "进入失败，请稍后重试" }));
+      throw new Error(errorData.detail || "进入失败");
+    }
+
+    const data = await res.json();
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    setToken(data.access_token);
+
+    const profileRes = await fetch(`${API_BASE}/api/user/profile`, {
+      headers: { Authorization: `Bearer ${data.access_token}` },
+    });
+    if (profileRes.ok) {
+      const profile = await profileRes.json();
+      setUser({
+        email: profile.email,
+        phone: profile.phone,
+        subscription: profile.subscription,
+      });
+      setRemainingQuota(
+        profile.daily_remaining === -1 ? Infinity : profile.daily_remaining
+      );
+    } else {
+      const isEmail = identifier.includes("@");
+      setUser({
+        email: isEmail ? identifier : null,
+        phone: isEmail ? null : identifier,
+        subscription: "free",
+      });
+      setRemainingQuota(3);
+    }
+  }, []);
 
   /* ── register：POST /api/auth/register → 自动登录 ── */
 
@@ -207,12 +262,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (profileRes.ok) {
       const profile = await profileRes.json();
-      setUser({ email: profile.email, subscription: profile.subscription });
+      setUser({
+        email: profile.email,
+        phone: profile.phone,
+        subscription: profile.subscription,
+      });
       setRemainingQuota(
         profile.daily_remaining === -1 ? Infinity : profile.daily_remaining
       );
     } else {
-      setUser({ email, subscription: "free" });
+      setUser({ email: email || null, phone: phone || null, subscription: "free" });
       setRemainingQuota(3);
     }
   },
@@ -231,7 +290,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* ── 初始化：检查认证状态 ── */
 
   useEffect(() => {
-    checkAuth();
+    const timeoutId = window.setTimeout(() => {
+      void checkAuth();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [checkAuth]);
 
   /* ── 提供上下文 ── */
@@ -246,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isPremium,
         remainingQuota,
         login,
+        simpleLogin,
         register,
         logout,
         checkAuth,

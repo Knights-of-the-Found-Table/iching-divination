@@ -44,6 +44,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SimpleLoginRequest(BaseModel):
+    """无密码登录请求体。"""
+
+    identifier: str
+
+
 class TokenResponse(BaseModel):
     """令牌响应体。"""
 
@@ -107,6 +113,43 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
 
     # 生成令牌
+    user_id_str = str(user.id)
+    return TokenResponse(
+        access_token=create_access_token(user_id_str),
+        refresh_token=create_refresh_token(user_id_str),
+    )
+
+
+@router.post("/simple-login", response_model=TokenResponse)
+async def simple_login(req: SimpleLoginRequest, db: AsyncSession = Depends(get_db)):
+    """使用邮箱或手机号直接登录，不存在时自动创建账号。"""
+    identifier = req.identifier.strip()
+    is_email = "@" in identifier
+
+    if is_email:
+        identifier = identifier.lower()
+        if not _validate_email(identifier):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="邮箱格式不正确")
+        result = await db.execute(select(User).where(User.email == identifier))
+    else:
+        if not _PHONE_RE.match(identifier):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="手机号格式不正确（1开头11位数字）",
+            )
+        result = await db.execute(select(User).where(User.phone == identifier))
+
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(
+            email=identifier if is_email else None,
+            phone=None if is_email else identifier,
+            password_hash="",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
     user_id_str = str(user.id)
     return TokenResponse(
         access_token=create_access_token(user_id_str),

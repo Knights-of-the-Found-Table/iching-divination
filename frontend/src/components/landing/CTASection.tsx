@@ -1,30 +1,48 @@
 "use client";
 
-/**
- * 底部 CTA 区域
- *
- * 大留白 + 引导语 + 开始占卜按钮。
- * 点击行为与 Hero CTA 一致：未登录跳转 /login，已登录跳转 /divination。
- */
-
-import Link from "next/link";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function CTASection() {
   const { isLoggedIn } = useAuth();
-  const ctaHref = isLoggedIn ? "/divination" : "/login";
+  const router = useRouter();
 
   return (
-    <section className="bg-ivory px-4 py-32 text-center">
-      <h2 className="mb-8 font-[family-name:var(--font-noto-serif)] text-2xl text-ink">
+    <section className="px-4 py-32 text-center">
+      <h2 className="mb-8 font-[family-name:var(--font-noto-serif)] text-2xl" style={{ color: "var(--color-text)" }}>
         准备好了吗？
       </h2>
-      <Link
-        href={ctaHref}
-        className="inline-block rounded border border-gold bg-transparent px-10 py-4 font-[family-name:var(--font-noto-serif)] text-lg tracking-wider text-ink transition-colors duration-300 hover:bg-gold hover:text-ivory"
+      <motion.button
+        onClick={() => router.push(isLoggedIn ? "/divination" : "/login")}
+        className="inline-block rounded-full border px-10 py-4 font-[family-name:var(--font-noto-serif)] text-lg tracking-wider transition-colors duration-300"
+        style={{
+          borderColor: "var(--color-accent)",
+          color: "var(--color-accent)",
+          background: "transparent",
+          fontWeight: 600,
+          letterSpacing: "0.05em",
+        }}
+        animate={{
+          boxShadow: [
+            "0 0 0px rgba(240,192,96,0)",
+            "0 0 18px rgba(240,192,96,0.4)",
+            "0 0 0px rgba(240,192,96,0)",
+          ],
+        }}
+        transition={{
+          boxShadow: { duration: 2.8, repeat: Infinity, ease: "easeInOut" },
+        }}
+        whileHover={{
+          scale: 1.05,
+          boxShadow: "0 0 28px rgba(240,192,96,0.55)",
+          backgroundColor: "var(--color-accent)",
+          color: "var(--color-bg)",
+        }}
+        whileTap={{ scale: 0.97 }}
       >
         开始占卜
-      </Link>
+      </motion.button>
     </section>
   );
 }

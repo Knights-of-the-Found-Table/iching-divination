@@ -10,8 +10,9 @@
  * 包含稀有度标签、查看详细解读 / 再次占卜按钮。
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import RarityEffect, { type Rarity } from "./RarityEffect";
 
 /* =========================================================================
@@ -68,40 +69,96 @@ function AwaitingDots() {
 }
 
 /* =========================================================================
- * 子组件：稀有度标签
+ * 子组件：稀有度徽章
  * ========================================================================= */
 
-/** 稀有度标签 */
-function RarityLabel({ rarity }: { rarity: Rarity }) {
-  const labelMap: Record<Rarity, { text: string; className: string }> = {
-    慎: {
-      text: "慎",
-      className: "text-warning border-warning/30",
-    },
-    中平: {
-      text: "中平",
-      className: "text-ink-light border-ink-light/20",
-    },
-    吉: {
-      text: "吉",
-      className: "text-gold border-gold",
-    },
-    大吉: {
-      text: "大吉",
-      className: "text-gold-light border-gold-light bg-gold-light/5",
-    },
-  };
+/** 各等级视觉配置 */
+const RARITY_BADGE_CONFIG: Record<
+  Rarity,
+  { icon: string; text: string; className: string; breathing?: boolean }
+> = {
+  大吉: {
+    icon: "✦",
+    text: "大吉",
+    className:
+      "border-[#d4af37]/80 bg-[#d4af37]/10 text-[#b8912f] shadow-[0_0_14px_rgba(212,175,55,0.4)]",
+    breathing: true,
+  },
+  吉: {
+    icon: "✧",
+    text: "吉",
+    className:
+      "border-[#c4a97d]/70 bg-[#c4a97d]/8 text-[#a8843f] shadow-[0_0_8px_rgba(196,169,125,0.25)]",
+    breathing: true,
+  },
+  中平: {
+    icon: "◇",
+    text: "中平",
+    className: "border-ink-light/25 text-ink-light/80",
+  },
+  慎: {
+    icon: "☾",
+    text: "慎",
+    className: "border-[#8d7fb8]/40 bg-[#8d7fb8]/8 text-[#7a6a9e]",
+  },
+};
 
-  const { text, className } = labelMap[rarity];
+/** 稀有度徽章：图标 + 文字；大吉带星星闪烁，大吉/吉带呼吸发光 */
+function RarityBadge({ rarity }: { rarity: Rarity }) {
+  const { icon, text, className, breathing } = RARITY_BADGE_CONFIG[rarity];
 
-  return (
+  const badge = (
     <span
-      className={`inline-block rounded border px-2 py-0.5 text-[10px] font-[family-name:var(--font-body)] tracking-wider ${className}`}
+      className={`relative inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-[family-name:var(--font-body)] tracking-wider ${className}`}
     >
+      <span className="text-[11px] leading-none">{icon}</span>
       {text}
+      {/* 大吉专属：两颗闪烁小星星 */}
+      {rarity === "大吉" && (
+        <>
+          <motion.span
+            aria-hidden="true"
+            className="absolute -right-1 -top-1 text-[8px] text-[#d4af37]"
+            animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          >
+            ✦
+          </motion.span>
+          <motion.span
+            aria-hidden="true"
+            className="absolute -bottom-1 -left-1 text-[8px] text-[#d4af37]"
+            animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.6, repeat: Infinity, delay: 0.8, ease: "easeInOut" }}
+          >
+            ✦
+          </motion.span>
+        </>
+      )}
     </span>
   );
+
+  /* 中平 / 慎：静态徽章，干净克制 */
+  if (!breathing) return badge;
+
+  /* 大吉 / 吉：微弱呼吸发光 */
+  return (
+    <motion.span
+      className="inline-block"
+      animate={{ opacity: [0.82, 1, 0.82], scale: [1, 1.05, 1] }}
+      transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+    >
+      {badge}
+    </motion.span>
+  );
 }
+
+/** 稀有度对应图片 */
+const RARITY_IMAGE: Record<Rarity, string> = {
+  大吉: "/images/anime/rarity-great-fortune.webp",
+  吉: "/images/anime/rarity-good-fortune.webp",
+  中平: "/images/anime/rarity-neutral.webp",
+  慎: "/images/anime/rarity-caution.webp",
+};
 
 /* =========================================================================
  * 主组件
@@ -187,16 +244,26 @@ export default function JudgmentCard({
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
           >
-            {/* 卦名 + 稀有度标签 */}
-            <div className="flex items-center justify-between mb-6">
+            {/* 卦名 + 稀有度图片标签 */}
+            <div className="flex items-center justify-between mb-6 gap-4">
               <h3
                 className="font-[family-name:var(--font-noto-serif)] text-xl text-ink"
                 style={
                   rarity === "大吉"
-                    ? { animation: "daji-name-float 2s ease-in-out infinite" }
+                    ? {
+                        animation: "daji-name-float 2s ease-in-out infinite",
+                        color: "#b8912f",
+                        textShadow: "0 0 16px rgba(212,175,55,0.5)",
+                      }
                     : rarity === "吉"
-                      ? { animation: "ji-brightness 1.5s ease-in-out infinite alternate" }
-                      : {}
+                      ? {
+                          animation: "ji-brightness 1.5s ease-in-out infinite alternate",
+                          color: "#a8843f",
+                          textShadow: "0 0 10px rgba(196,169,125,0.35)",
+                        }
+                      : rarity === "慎"
+                        ? { color: "#6b5d8a" }
+                        : {}
                 }
               >
                 {rarity === "大吉" && (
@@ -211,7 +278,14 @@ export default function JudgmentCard({
                 )}
                 {hexagramName}
               </h3>
-              <RarityLabel rarity={rarity} />
+              <Image
+                src={RARITY_IMAGE[rarity]}
+                alt={rarity}
+                width={200}
+                height={100}
+                className="h-14 w-auto object-contain"
+                unoptimized
+              />
             </div>
 
             {/* 判词正文 — typewriter 效果 */}

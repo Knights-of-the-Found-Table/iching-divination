@@ -1,21 +1,19 @@
 /**
  * Landing 首页
  *
- * 组合四个区域构成完整的首屏体验：
- * Hero → CultureIntro → HexagramWall → CTA
+ * 组合三个区域构成完整的首屏体验：
+ * Hero -> FeatureCards -> CTA
  */
 
-import HeroSection from "@/components/landing/HeroSection";
-import CultureIntro from "@/components/landing/CultureIntro";
-import HexagramWall from "@/components/landing/HexagramWall";
+import HeroSection from "@/components/landing/HeroSectionAlt";
+import FeatureCards from "@/components/landing/FeatureCards";
 import CTASection from "@/components/landing/CTASection";
 
 export default function HomePage() {
   return (
     <>
       <HeroSection />
-      <CultureIntro />
-      <HexagramWall />
+      <FeatureCards />
       <CTASection />
     </>
   );

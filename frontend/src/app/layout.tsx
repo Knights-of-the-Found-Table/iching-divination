@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Noto_Serif_SC } from "next/font/google";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider, ThemeScript } from "@/hooks/useTheme";
@@ -52,7 +53,9 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col bg-ivory text-ink">
         <ThemeProvider>
           <AuthProvider>
-            <AnimeDecor />
+            <Suspense fallback={null}>
+              <AnimeDecor />
+            </Suspense>
             <ThemeToggle />
             <Header />
             {/* 主内容：留出 Header 高度（56px）的顶部间距 */}

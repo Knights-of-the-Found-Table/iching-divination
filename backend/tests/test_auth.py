@@ -189,6 +189,70 @@ class TestAuthAPI:
         assert "邮箱或密码错误" == resp.json()["detail"]
 
     @pytest.mark.asyncio
+    async def test_simple_login_creates_email_user(self, client, unique_email):
+        """测试无密码登录会创建邮箱用户并返回 tokens。"""
+        resp = await client.post(
+            "/api/auth/simple-login",
+            json={"identifier": unique_email},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+
+        profile = await client.get(
+            "/api/user/profile",
+            headers={"Authorization": f"Bearer {data['access_token']}"},
+        )
+        assert profile.status_code == 200
+        assert profile.json()["email"] == unique_email
+        assert profile.json()["phone"] is None
+
+    @pytest.mark.asyncio
+    async def test_simple_login_reuses_existing_user(self, client, unique_email):
+        """测试同一 identifier 再次登录不会重复创建账号。"""
+        first = await client.post(
+            "/api/auth/simple-login",
+            json={"identifier": unique_email},
+        )
+        second = await client.post(
+            "/api/auth/simple-login",
+            json={"identifier": unique_email},
+        )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert decode_token(first.json()["access_token"])["sub"] == decode_token(
+            second.json()["access_token"]
+        )["sub"]
+
+    @pytest.mark.asyncio
+    async def test_simple_login_creates_phone_user(self, client):
+        """测试无密码登录支持手机号。"""
+        phone = f"139{uuid.uuid4().int % 100_000_000:08d}"
+        resp = await client.post(
+            "/api/auth/simple-login",
+            json={"identifier": phone},
+        )
+        assert resp.status_code == 200
+
+        profile = await client.get(
+            "/api/user/profile",
+            headers={"Authorization": f"Bearer {resp.json()['access_token']}"},
+        )
+        assert profile.status_code == 200
+        assert profile.json()["email"] is None
+        assert profile.json()["phone"] == phone
+
+    @pytest.mark.asyncio
+    async def test_simple_login_rejects_invalid_identifier(self, client):
+        """测试无效邮箱或手机号返回 400。"""
+        resp = await client.post(
+            "/api/auth/simple-login",
+            json={"identifier": "not-an-identifier"},
+        )
+        assert resp.status_code == 400
+
+    @pytest.mark.asyncio
     async def test_refresh_success(self, client, unique_email):
         """测试 token 刷新成功。"""
         # 注册获取 refresh token

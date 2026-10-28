@@ -9,8 +9,11 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 export default function AnimeDecor() {
+  const pathname = usePathname();
+  const hideOracle = !pathname || pathname === "/" || pathname.startsWith("/divination");
   const [theme, setTheme] = useState("swiss");
   const [mounted, setMounted] = useState(false);
 
@@ -30,20 +33,23 @@ export default function AnimeDecor() {
 
   return (
     <>
-      {/* 右下角 chibi 占卜师 */}
-      <div
-        className="fixed bottom-20 right-20 z-40 pointer-events-none select-none hidden sm:block"
-        style={{ animation: "float 3s ease-in-out infinite" }}
-      >
-        <Image
-          src="/images/anime/chibi-oracle.webp"
-          alt="占卜师"
-          width={120}
-          height={160}
-          className="object-contain"
-          priority
-        />
-      </div>
+      {/* 右下角 chibi 占卜师：首页由 HeroSectionAlt 独立渲染，避免重复 */}
+      {!hideOracle && (
+        <div
+          className="fixed bottom-20 right-20 z-40 pointer-events-none select-none hidden sm:block"
+          style={{ animation: "float 3s ease-in-out infinite" }}
+        >
+          <Image
+            src="/images/anime/chibi-oracle.webp"
+            alt="占卜师"
+            width={400}
+            height={540}
+            className="object-contain"
+            unoptimized
+            priority
+          />
+        </div>
+      )}
 
       {/* 左下角黑猫 */}
       <div
@@ -56,6 +62,7 @@ export default function AnimeDecor() {
           width={80}
           height={80}
           className="object-contain"
+          unoptimized
         />
       </div>
 
