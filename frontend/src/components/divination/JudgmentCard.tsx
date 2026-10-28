@@ -35,6 +35,8 @@ export interface JudgmentCardProps {
   onRetry: () => void;
   /** 是否有解卦数据（控制"查看详细解读"是否可点击） */
   canExpand?: boolean;
+  /** 点击"生成分享图"（提供时显示该按钮） */
+  onShare?: () => void;
 }
 
 /* =========================================================================
@@ -191,6 +193,7 @@ export default function JudgmentCard({
   onExpand,
   onRetry,
   canExpand = true,
+  onShare,
 }: JudgmentCardProps) {
   /** 已显示的字符数（typewriter 进度） */
   const [displayedCount, setDisplayedCount] = useState(0);
@@ -307,7 +310,7 @@ export default function JudgmentCard({
             <AnimatePresence>
               {typewriterDone && (
                 <motion.div
-                  className="flex items-center justify-center gap-6 mt-8"
+                  className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
@@ -341,6 +344,21 @@ export default function JudgmentCard({
                   >
                     再次占卜
                   </motion.button>
+
+                  {/* 生成分享图 */}
+                  {onShare && (
+                    <motion.button
+                      onClick={onShare}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded border border-gold-light/50 px-5 py-2
+                        font-[family-name:var(--font-noto-serif)] text-sm text-gold-light
+                        hover:border-gold-light hover:text-gold
+                        transition-all duration-300 cursor-pointer"
+                    >
+                      生成分享图
+                    </motion.button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

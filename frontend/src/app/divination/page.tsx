@@ -19,6 +19,7 @@ import QuestionInput from "@/components/divination/QuestionInput";
 import TurtleShake, { type LineResult } from "@/components/divination/TurtleShake";
 import JudgmentCard from "@/components/divination/JudgmentCard";
 import InterpretationSection, { type InterpretationData } from "@/components/divination/InterpretationSection";
+import ShareCard from "@/components/divination/ShareCard";
 import {
   mockDivination, mockInterpretation, isMockMode, type MockDivinationResponse,
 } from "@/lib/mock";
@@ -354,6 +355,7 @@ export default function DivinationPage() {
   const [interpretation, setInterpretation] = useState<InterpretationData | null>(null);
   const [loadingInterpretation, setLoadingInterpretation] = useState(false);
   const [interpretationError, setInterpretationError] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   /* ── 每爻回调 ── */
   const handleLineRevealed = useCallback((line: LineResult) => {
@@ -417,7 +419,7 @@ export default function DivinationPage() {
   const handleRetry = useCallback(() => {
     setPhase("idle"); setQuestion(""); setLineCount(0); setCollectedLines([]);
     setResult(null); setError(null); setInterpretation(null); setInterpretationError(null);
-    setAwaitingJudgment(false); setReveal(null);
+    setAwaitingJudgment(false); setReveal(null); setShareOpen(false);
   }, []);
 
   /* ── 渲染 ── */
@@ -548,6 +550,7 @@ export default function DivinationPage() {
                       onExpand={handleExpand}
                       onRetry={handleRetry}
                       canExpand={true}
+                      onShare={() => setShareOpen(true)}
                     />
 
                     <AnimatePresence>
@@ -555,7 +558,8 @@ export default function DivinationPage() {
                         <motion.div key="interpretation" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="w-full overflow-hidden">
                           <InterpretationSection data={interpretation} loading={loadingInterpretation} error={interpretationError} />
                           {interpretation && (
-                            <div className="flex justify-center pb-4">
+                            <div className="flex flex-wrap items-center justify-center gap-4 pb-4">
+                              <button onClick={() => setShareOpen(true)} className="cursor-pointer rounded-full border border-[var(--color-accent,#d9b46a)]/45 px-5 py-1.5 text-sm text-[var(--color-accent,#d9b46a)] transition-colors hover:bg-[var(--color-accent,#d9b46a)] hover:text-[#15101f] font-[family-name:var(--font-body)]">生成分享图</button>
                               <button onClick={() => setPhase("judgment")} className="cursor-pointer text-sm text-[var(--color-accent,#d9b46a)] transition-colors hover:text-[var(--color-text,#f6efff)] font-[family-name:var(--font-body)]">[收起]</button>
                             </div>
                           )}
@@ -611,6 +615,22 @@ export default function DivinationPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 判词分享图预览层（P1-1） */}
+      {result && (
+        <ShareCard
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          hexagramName={result.hexagram.name}
+          rarity={result.hexagram.rarity}
+          judgment={result.judgment}
+          lines={collectedLines.map((l) => ({
+            position: l.position,
+            type: l.type,
+            changing: l.changing,
+          }))}
+        />
+      )}
 
       <div className="relative mt-4 sm:hidden">
         <LinesPanel collectedLines={collectedLines} />
