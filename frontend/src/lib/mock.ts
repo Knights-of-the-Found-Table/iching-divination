@@ -1,9 +1,12 @@
-/**
- * 模拟占卜 API - 前端独立开发用
+/** 模拟占卜 API - 前端独立开发用
  *
  * 当后端不可用时(NEXT_PUBLIC_MOCK_API=true),
  * 使用此模块提供模拟数据,使前端可独立开发调试。
+ *
+ * 另含免登录体验卦（guestDivination，P1-2）：本地随机起卦 + 通用判词。
  */
+
+import { HEXAGRAMS_64 } from "@/lib/hexagrams";
 
 /** 爻线数据 */
 export interface MockLine {
@@ -408,4 +411,131 @@ export async function mockInterpretation(
  */
 export function isMockMode(): boolean {
   return process.env.NEXT_PUBLIC_MOCK_API === "true";
+}
+
+/* =========================================================================
+ * 免登录体验卦（P1-2）
+ *
+ * 纯前端本地起卦：随机生成六爻 → 按上下卦二进制索引查通行本卦序表
+ * 得到本卦/之卦名 → 配一条通用判词。不调用任何后端 API。
+ * ========================================================================= */
+
+/**
+ * 通行本卦序表：TABLE[上卦][下卦] = 卦序 1-64。
+ * 卦按三爻自下而上、阳爻 = 1 的二进制编码：
+ * 乾=111(7) 巽=110(6) 离=101(5) 艮=100(4) 兑=011(3) 坎=010(2) 震=001(1) 坤=000(0)。
+ * 表由六十四卦名（首字 = 上卦象、次字 = 下卦象）机械推导并验证无重无漏。
+ */
+const KING_WEN_TABLE: number[][] = [
+  /* 乾上 */ [1, 10, 13, 25, 44, 6, 33, 12],
+  /* 兑上 */ [43, 58, 49, 17, 28, 47, 31, 45],
+  /* 离上 */ [14, 38, 30, 21, 50, 64, 56, 35],
+  /* 震上 */ [34, 54, 55, 51, 32, 40, 62, 16],
+  /* 巽上 */ [9, 61, 37, 42, 57, 59, 53, 20],
+  /* 坎上 */ [5, 60, 63, 3, 48, 29, 39, 8],
+  /* 艮上 */ [26, 41, 22, 27, 18, 4, 52, 23],
+  /* 坤上 */ [11, 19, 36, 24, 46, 7, 15, 2],
+];
+
+/** 模拟三钱抛掷，返回 6/7/8/9（与 TurtleShake 同分布） */
+function castCoinSum(): number {
+  let sum = 0;
+  for (let i = 0; i < 3; i++) {
+    sum += Math.random() < 0.5 ? 3 : 2;
+  }
+  return sum;
+}
+
+/** 三爻二进制编码（自下而上，阳 = 1）→ 表下标（0 = 乾上 … 7 = 坤上） */
+function trigramIndex(bits: number): number {
+  switch (bits) {
+    case 7: return 0; /* 乾 */
+    case 3: return 1; /* 兑 */
+    case 5: return 2; /* 离 */
+    case 1: return 3; /* 震 */
+    case 6: return 4; /* 巽 */
+    case 2: return 5; /* 坎 */
+    case 4: return 6; /* 艮 */
+    default: return 7; /* 坤 */
+  }
+}
+
+/** 由六爻值数组（自下而上）求本卦名；有变爻时同时求之卦名 */
+function resolveHexagramName(values: number[]): {
+  name: string;
+  changedName?: string;
+} {
+  const lowerBits = (values[0] % 2) + ((values[1] % 2) << 1) + ((values[2] % 2) << 2);
+  const upperBits = (values[3] % 2) + ((values[4] % 2) << 1) + ((values[5] % 2) << 2);
+  const order = KING_WEN_TABLE[trigramIndex(upperBits)][trigramIndex(lowerBits)];
+  const name = HEXAGRAMS_64[order - 1].name;
+
+  const hasChanging = values.some((v) => v === 6 || v === 9);
+  if (!hasChanging) return { name };
+
+  const flipped = values.map((v) => (v === 6 || v === 9 ? 7 - v : v));
+  const lower2 = (flipped[0] % 2) + ((flipped[1] % 2) << 1) + ((flipped[2] % 2) << 2);
+  const upper2 = (flipped[3] % 2) + ((flipped[4] % 2) << 1) + ((flipped[5] % 2) << 2);
+  const order2 = KING_WEN_TABLE[trigramIndex(upper2)][trigramIndex(lower2)];
+  return { name, changedName: HEXAGRAMS_64[order2 - 1].name };
+}
+
+/** 体验模式稀有度：加权随机 */
+function pickRarity(): MockHexagram["rarity"] {
+  const r = Math.random();
+  if (r < 0.1) return "大吉";
+  if (r < 0.35) return "吉";
+  if (r < 0.85) return "中平";
+  return "慎";
+}
+
+/** 预置通用判词（不针对具体卦象，适合任意体验卦） */
+const GUEST_JUDGMENTS: string[] = [
+  "云开月正明，风静浪自平。\n所问之事渐次澄明，宜静守以待时。\n\n阴阳相推，其道乃光。\n事在将成未成之间，稳步而行，自有无咎。\n\n守中毋躁，时至则动，名显而身安。",
+  "潮平两岸阔，风正一帆悬。\n所问之势正在上行，然满招损、谦受益。\n\n今得此象，进取可也，贵在量力。\n锋芒不可尽露，留三分余地，方保终吉。\n\n慎始如终，则无败事。",
+  "月有盈亏，事有起伏。\n所问之事近期或有迂回，非路之不达，乃时之未至。\n\n宜蓄势敛翼，不宜强求。\n待云破处，一照万川。\n\n静为躁君，从容者胜。",
+  "山泽通气，刚柔相应。\n所问之事，贵在得人，独行者钝，同行者速。\n\n诚之所至，金石为开。\n以信待人，则谋无不谐；以疑处事，则步步成碍。\n\n虚己而纳善，其道大光。",
+  "雷风相薄，动而有应。\n所问之事，机在目前，然动中有变，不可不察。\n\n谋定而后动，动则必有名。\n若问归期，即在不远；若问成败，七分在天，三分在勤。\n\n尽人事而后听天命，可也。",
+];
+
+/**
+ * 免登录体验卦：本地随机起卦 + 通用判词，不写后端。
+ *
+ * castedLines 提供时（体验模式下用户刚摇出的六爻）按其阴阳/动爻推演卦名，
+ * 保证揭晓的卦象与用户逐爻看到的面板一致；未提供时本地随机起卦。
+ */
+export async function guestDivination(
+  question: string,
+  castedLines?: Array<{ type: "yang" | "yin"; changing: boolean }>
+): Promise<MockDivinationResponse> {
+  const delay = 800 + Math.random() * 800;
+  await new Promise((resolve) => setTimeout(resolve, delay));
+
+  let values: number[];
+  if (castedLines && castedLines.length === 6) {
+    values = castedLines.map((l) =>
+      l.type === "yang" ? (l.changing ? 9 : 7) : l.changing ? 6 : 8
+    );
+  } else {
+    values = Array.from({ length: 6 }, () => castCoinSum());
+  }
+  const { name, changedName } = resolveHexagramName(values);
+  const rarity = pickRarity();
+  const judgment =
+    GUEST_JUDGMENTS[Math.floor(Math.random() * GUEST_JUDGMENTS.length)];
+
+  return {
+    id: `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    hexagram: {
+      name,
+      changedName,
+      lines: values.map((v, i) => ({
+        position: i + 1,
+        type: (v === 7 || v === 9 ? "yang" : "yin") as "yang" | "yin",
+        changing: v === 6 || v === 9,
+      })),
+      rarity,
+    },
+    judgment,
+  };
 }

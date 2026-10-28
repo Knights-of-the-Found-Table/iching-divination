@@ -21,7 +21,7 @@ import JudgmentCard from "@/components/divination/JudgmentCard";
 import InterpretationSection, { type InterpretationData } from "@/components/divination/InterpretationSection";
 import ShareCard from "@/components/divination/ShareCard";
 import {
-  mockDivination, mockInterpretation, isMockMode, type MockDivinationResponse,
+  mockDivination, mockInterpretation, guestDivination, isMockMode, type MockDivinationResponse,
 } from "@/lib/mock";
 import { apiPost, apiGet } from "@/lib/api";
 
@@ -363,13 +363,18 @@ export default function DivinationPage() {
     setLineCount((prev) => prev + 1);
   }, []);
 
-  /* ── 六爻完成 → 发起 API ── */
+  /* ── 六爻完成 → 发起判词（登录：后端 API；未登录：本地体验卦，不写后端） ── */
   const handleShakeComplete = useCallback(async () => {
     setAwaitingJudgment(true);
     try {
       const data = isMockMode()
         ? await mockDivination(question)
-        : await apiPost<RealDivinationResponse>("/api/divination", { question }).then((raw) => {
+        : !isLoggedIn
+          ? await guestDivination(
+              question,
+              collectedLines.map((l) => ({ type: l.type, changing: l.changing }))
+            )
+          : await apiPost<RealDivinationResponse>("/api/divination", { question }).then((raw) => {
             /* 429 等异常响应可能返回非卦象格式，先校验再 normalize，避免爆出难懂的 TypeError */
             if (!raw || !raw.hexagram || !raw.hexagram.original || !Array.isArray(raw.hexagram.original.lines)) {
               throw new Error("卦象数据异常，请稍后重试");
@@ -394,7 +399,7 @@ export default function DivinationPage() {
     } finally {
       setAwaitingJudgment(false);
     }
-  }, [question]);
+  }, [question, isLoggedIn, collectedLines]);
 
   /* ── 展开解卦 ── */
   const handleExpand = useCallback(async () => {
@@ -432,14 +437,7 @@ export default function DivinationPage() {
     );
   }
 
-  if (!isLoggedIn) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 bg-[var(--color-bg,#080713)] px-4 text-center text-[var(--color-text,#f6efff)]">
-        <p className="text-[var(--color-text-secondary,rgba(246,239,255,0.72))]">请先登录后开始占卜</p>
-        <Link href="/login" className="rounded-full border border-[var(--color-accent,#d9b46a)] px-6 py-2 font-[family-name:var(--font-noto-serif)] text-[var(--color-accent,#d9b46a)] transition-colors hover:bg-[var(--color-accent,#d9b46a)] hover:text-[#15101f]">前往登录</Link>
-      </div>
-    );
-  }
+  /* 未登录不拦流：进入体验卦模式（本地起卦，不写后端，判词后展示登录引导） */
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-[var(--color-bg,#080713)] px-3 py-4 text-[var(--color-text,#f6efff)] sm:px-6 sm:py-8">
@@ -471,6 +469,7 @@ export default function DivinationPage() {
               </p>
             </div>
 
+            {!isLoggedIn && <span className="w-fit rounded-full border border-[var(--color-accent-alt,#b8a9d6)]/45 px-3 py-1 text-[10px] tracking-[0.2em] text-[var(--color-accent-alt,#b8a9d6)]">体验模式 · 登录后可保存记录</span>}
             {isMockMode() && <span className="w-fit rounded-full border border-[var(--color-accent,#d9b46a)]/25 px-3 py-1 text-[10px] tracking-[0.2em] text-[var(--color-accent,#d9b46a)]">MOCK 模式</span>}
           </div>
 
@@ -549,9 +548,29 @@ export default function DivinationPage() {
                       judgment={result.judgment}
                       onExpand={handleExpand}
                       onRetry={handleRetry}
-                      canExpand={true}
+                      canExpand={isLoggedIn}
                       onShare={() => setShareOpen(true)}
                     />
+
+                    {/* 免登录体验卦：登录引导条（P1-2） */}
+                    {!isLoggedIn && (
+                      <motion.div
+                        className="w-full max-w-lg rounded-3xl border border-[var(--color-accent,#d9b46a)]/30 bg-[var(--color-bg-card,rgba(18,14,38,0.72))] px-6 py-5 text-center"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.45, delay: 0.2 }}
+                      >
+                        <p className="text-sm leading-6 text-[var(--color-text-secondary,rgba(246,239,255,0.75))]">
+                          登录后可获得 AI 专属判词与详细解读，并保存卦象记录
+                        </p>
+                        <Link
+                          href="/login"
+                          className="mt-3 inline-block rounded-full border border-[var(--color-accent,#d9b46a)] px-6 py-2 font-[family-name:var(--font-noto-serif)] text-sm text-[var(--color-accent,#d9b46a)] transition-colors hover:bg-[var(--color-accent,#d9b46a)] hover:text-[#15101f]"
+                        >
+                          立即登录
+                        </Link>
+                      </motion.div>
+                    )}
 
                     <AnimatePresence>
                       {phase === "expanded" && (
