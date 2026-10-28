@@ -254,9 +254,9 @@ export default function DashboardPage() {
               </p>
             ) : (
               <p className="font-[family-name:var(--font-noto-serif)] text-2xl text-ink">
-                {quota.remaining}
+                {quota.remaining ?? 0}
                 <span className="ml-1 text-sm text-warning">
-                  / {quota.limit} 次
+                  / {quota.limit ?? 0} 次
                 </span>
               </p>
             )
@@ -272,7 +272,7 @@ export default function DashboardPage() {
           <p className="mb-1 text-xs text-warning">累计占卜</p>
           {history ? (
             <p className="font-[family-name:var(--font-noto-serif)] text-2xl text-ink">
-              {history.total}
+              {history.total ?? 0}
               <span className="ml-1 text-sm text-warning">次</span>
             </p>
           ) : (
