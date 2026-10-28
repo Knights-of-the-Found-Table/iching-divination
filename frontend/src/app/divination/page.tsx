@@ -9,7 +9,7 @@
  * 第 6 次完成后发起 API 获取判词，进入 JUDGMENT。
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -356,6 +356,8 @@ export default function DivinationPage() {
   /** 成卦汇聚动画（P2-2）：非空时全屏播放，结束后进入卦名揭晓 */
   const [convergeLines, setConvergeLines] = useState<LineResult[] | null>(null);
   const convergeResolveRef = useRef<(() => void) | null>(null);
+  /** 当日额度耗尽（P2-3）：摇卦入口显示回访钩子 */
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
 
   const [interpretation, setInterpretation] = useState<InterpretationData | null>(null);
   const [loadingInterpretation, setLoadingInterpretation] = useState(false);
@@ -367,6 +369,21 @@ export default function DivinationPage() {
     setCollectedLines((prev) => [...prev, line]);
     setLineCount((prev) => prev + 1);
   }, []);
+
+  /* ── 额度检查（P2-3）：登录用户回到摇卦入口时刷新当日额度 ── */
+  const refreshQuota = useCallback(async () => {
+    if (!isLoggedIn || isMockMode()) return;
+    try {
+      const q = await apiGet<{ remaining: number; is_premium: boolean }>("/api/user/quota");
+      setQuotaExhausted(!q.is_premium && q.remaining <= 0);
+    } catch {
+      /* 额度查询失败不阻断占卜入口，429 兜底仍在 */
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (phase === "idle") void refreshQuota();
+  }, [phase, refreshQuota]);
 
   /* ── 六爻完成 → 发起判词（登录：后端 API；未登录：本地体验卦，不写后端） ── */
   const handleShakeComplete = useCallback(async () => {
@@ -402,12 +419,18 @@ export default function DivinationPage() {
       setPhase("judgment");
     } catch (e) {
       const raw = e instanceof Error ? e.message : "";
-      const msg = /429|次数|额度|上限|频繁|quota|limit/i.test(raw)
-        ? "今日免费次数已用完，请明天再来"
-        : raw || "网络异常，请稍后重试";
-      setError(msg);
-      /* 关键：离开 shaking 阶段，否则错误卡片（只在 judgment/expanded 渲染）永远不会出现，页面卡死 */
-      setPhase("judgment");
+      const isQuotaError = /429|次数|额度|上限|频繁|quota|limit/i.test(raw);
+      if (isQuotaError) {
+        /* P2-3：429 不再弹错误卡片，回到摇卦入口显示回访钩子（错误文案保留为下方兜底分支） */
+        setQuotaExhausted(true);
+        setCollectedLines([]);
+        setLineCount(0);
+        setPhase("idle");
+      } else {
+        setError(raw || "网络异常，请稍后重试");
+        /* 关键：离开 shaking 阶段，否则错误卡片（只在 judgment/expanded 渲染）永远不会出现，页面卡死 */
+        setPhase("judgment");
+      }
     } finally {
       setAwaitingJudgment(false);
     }
@@ -497,24 +520,50 @@ export default function DivinationPage() {
                 className="relative flex min-h-[560px] flex-col items-center justify-center gap-6 overflow-hidden rounded-[2rem]"
               >
                 <div className="pointer-events-none absolute inset-0 bg-[url('/images/anime/velvet-bg.webp')] bg-cover bg-center opacity-50" />
-                <div className="relative flex h-52 w-52 items-center justify-center sm:h-64 sm:w-64">
-                  <div className="absolute inset-4 rounded-full bg-[radial-gradient(circle,rgba(217,180,106,0.16),rgba(141,91,255,0.14)_45%,transparent_72%)] blur-xl" />
-                  <div className="absolute bottom-5 left-1/2 h-14 w-44 -translate-x-1/2 rounded-[50%] bg-[radial-gradient(ellipse,rgba(70,38,101,0.52)_0%,rgba(38,18,61,0.38)_48%,transparent_76%)] blur-[2px]" />
-                  <motion.div animate={{ scale: [1, 1.04, 1] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
-                    <Image
-                      src="/images/anime/turtle-shell-shake.webp"
-                      alt="占卜龟壳"
-                      width={512}
-                      height={512}
-                      className="relative z-10 h-full w-full object-contain drop-shadow-[0_18px_34px_rgba(0,0,0,0.38)]"
-                      unoptimized
-                      priority
-                    />
+                {quotaExhausted ? (
+                  /* P2-3：额度耗尽回访钩子 — 取代 429 错误弹窗 */
+                  <motion.div
+                    className="relative mx-auto max-w-md rounded-[1.75rem] border border-[var(--color-accent,#d9b46a)]/30 bg-[var(--color-bg-card,rgba(18,14,38,0.72))] px-8 py-10 text-center shadow-[0_24px_70px_rgba(0,0,0,0.28)]"
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.45, ease: "easeOut" }}
+                  >
+                    <p className="font-[family-name:var(--font-noto-serif)] text-lg leading-9 text-[var(--color-accent,#d9b46a)]">
+                      今日十卦已圆，灵龟归渊。
+                      <br />
+                      明日辰时，再候君临。
+                    </p>
+                    <Link
+                      href="/dashboard"
+                      className="mt-6 inline-block rounded-full border border-[var(--color-accent,#d9b46a)] px-6 py-2
+                        font-[family-name:var(--font-noto-serif)] text-sm text-[var(--color-accent,#d9b46a)]
+                        transition-colors hover:bg-[var(--color-accent,#d9b46a)] hover:text-[#15101f]"
+                    >
+                      查看今日卦象记录
+                    </Link>
                   </motion.div>
-                </div>
-                <div className="w-full max-w-xl">
-                  <QuestionInput question={question} onQuestionChange={setQuestion} onSubmit={() => { if (question.trim()) setPhase("shaking"); }} />
-                </div>
+                ) : (
+                  <>
+                    <div className="relative flex h-52 w-52 items-center justify-center sm:h-64 sm:w-64">
+                      <div className="absolute inset-4 rounded-full bg-[radial-gradient(circle,rgba(217,180,106,0.16),rgba(141,91,255,0.14)_45%,transparent_72%)] blur-xl" />
+                      <div className="absolute bottom-5 left-1/2 h-14 w-44 -translate-x-1/2 rounded-[50%] bg-[radial-gradient(ellipse,rgba(70,38,101,0.52)_0%,rgba(38,18,61,0.38)_48%,transparent_76%)] blur-[2px]" />
+                      <motion.div animate={{ scale: [1, 1.04, 1] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
+                        <Image
+                          src="/images/anime/turtle-shell-shake.webp"
+                          alt="占卜龟壳"
+                          width={512}
+                          height={512}
+                          className="relative z-10 h-full w-full object-contain drop-shadow-[0_18px_34px_rgba(0,0,0,0.38)]"
+                          unoptimized
+                          priority
+                        />
+                      </motion.div>
+                    </div>
+                    <div className="w-full max-w-xl">
+                      <QuestionInput question={question} onQuestionChange={setQuestion} onSubmit={() => { if (question.trim()) setPhase("shaking"); }} />
+                    </div>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
