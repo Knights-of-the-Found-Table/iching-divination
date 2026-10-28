@@ -20,6 +20,7 @@ import TurtleShake, { type LineResult } from "@/components/divination/TurtleShak
 import JudgmentCard from "@/components/divination/JudgmentCard";
 import InterpretationSection, { type InterpretationData } from "@/components/divination/InterpretationSection";
 import ShareCard from "@/components/divination/ShareCard";
+import HexagramConverge from "@/components/divination/HexagramConverge";
 import {
   mockDivination, mockInterpretation, guestDivination, isMockMode, type MockDivinationResponse,
 } from "@/lib/mock";
@@ -352,6 +353,9 @@ export default function DivinationPage() {
   const [error, setError] = useState<string | null>(null);
   const [awaitingJudgment, setAwaitingJudgment] = useState(false);
   const [reveal, setReveal] = useState<HexagramReveal | null>(null);
+  /** 成卦汇聚动画（P2-2）：非空时全屏播放，结束后进入卦名揭晓 */
+  const [convergeLines, setConvergeLines] = useState<LineResult[] | null>(null);
+  const convergeResolveRef = useRef<(() => void) | null>(null);
 
   const [interpretation, setInterpretation] = useState<InterpretationData | null>(null);
   const [loadingInterpretation, setLoadingInterpretation] = useState(false);
@@ -383,7 +387,12 @@ export default function DivinationPage() {
             return normalizeResponse(raw);
           });
       setResult(data);
-      /* 先揭晓卦名（2.5s 停留 + 淡出），再进入判词阶段 */
+      /* 先播放成卦汇聚动画（可点击跳过），钟磬声落在揭晓层出现的瞬间 */
+      setConvergeLines(collectedLines);
+      await new Promise<void>((resolve) => {
+        convergeResolveRef.current = resolve;
+      });
+      setConvergeLines(null);
       soundManager.play("reveal", 0.9);
       setReveal({ name: data.hexagram.name, rarity: data.hexagram.rarity });
       await new Promise((r) => setTimeout(r, 2500));
@@ -428,6 +437,7 @@ export default function DivinationPage() {
     setPhase("idle"); setQuestion(""); setLineCount(0); setCollectedLines([]);
     setResult(null); setError(null); setInterpretation(null); setInterpretationError(null);
     setAwaitingJudgment(false); setReveal(null); setShareOpen(false);
+    setConvergeLines(null); convergeResolveRef.current = null;
   }, []);
 
   /* ── 渲染 ── */
@@ -597,6 +607,20 @@ export default function DivinationPage() {
 
         <DesktopRightRail collectedLines={collectedLines} />
       </div>
+
+      {/* 成卦汇聚动画（P2-2）：六爻堆叠 → 发光脉冲 → 缩小上移，接卦名揭晓 */}
+      <AnimatePresence>
+        {convergeLines && (
+          <HexagramConverge
+            lines={convergeLines.map((l) => ({
+              position: l.position,
+              type: l.type,
+              changing: l.changing,
+            }))}
+            onDone={() => convergeResolveRef.current?.()}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 卦名揭晓：大字居中，稀有度配色，2.5s 后淡出 */}
       <AnimatePresence>
