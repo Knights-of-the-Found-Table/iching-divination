@@ -7,9 +7,10 @@
  * 每次点击触发一爻 → 模拟三钱抛掷 → 回传 LineResult → 第 6 爻后调用 onComplete。
  */
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { soundManager } from "@/lib/sounds";
 
 /* =========================================================================
  * 类型定义
@@ -170,6 +171,21 @@ export default function TurtleShake({ onLineRevealed, onComplete, collectedLines
   const [isKnocked, setIsKnocked] = useState(false);
   const [visibleCoins, setVisibleCoins] = useState<VisualCoin[]>(() => randomCoinSet(1));
   const [lastToast, setLastToast] = useState<LineResult | null>(null);
+  /** 静音开关（🔊/🔇），选择持久化到 localStorage */
+  const [muted, setMuted] = useState(false);
+
+  /* 客户端挂载后读取持久化的静音状态，避免 SSR 水合不一致 */
+  useEffect(() => {
+    setMuted(soundManager.muted);
+  }, []);
+
+  function toggleMuted() {
+    const next = !muted;
+    setMuted(next);
+    soundManager.setMuted(next);
+    /* 解除静音时顺带解锁音频上下文，让下一次摇卦立即有声 */
+    if (!next) void soundManager.unlock();
+  }
 
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -178,6 +194,9 @@ export default function TurtleShake({ onLineRevealed, onComplete, collectedLines
 
   const handleClick = useCallback(() => {
     if (isShaking || isDone) return;
+
+    /* 首次点击在此手势内解锁 AudioContext（自动播放策略），随后摇壳音效 */
+    void soundManager.unlock().then(() => soundManager.play("shake", 0.8));
 
     const startsNextLine = droppedCoinCount === 3;
     const nextDroppedCoinCount = startsNextLine ? 1 : droppedCoinCount + 1;
@@ -194,6 +213,7 @@ export default function TurtleShake({ onLineRevealed, onComplete, collectedLines
     // 每次触碰只落下一枚铜钱；第三枚落定后才生成这一爻。
     setTimeout(() => {
       setDroppedCoinCount(nextDroppedCoinCount);
+      soundManager.play("coin", 0.9);
 
       // 等铜钱弹落定后，才允许下一次触碰或揭示爻象。
       setTimeout(() => {
@@ -239,6 +259,19 @@ export default function TurtleShake({ onLineRevealed, onComplete, collectedLines
   return (
     <div className="flex w-full flex-col items-center justify-center gap-4 px-2 py-3 text-[var(--color-text,#f6efff)] sm:gap-6 sm:px-4 sm:py-6">
       <div className="relative flex min-h-[280px] w-full max-w-[520px] flex-col items-center justify-center overflow-hidden rounded-[2rem] bg-[url('/images/anime/velvet-bg.webp')] bg-cover bg-center bg-no-repeat sm:min-h-[430px]">
+        {/* 音效静音开关（P2-1）：面板右上角，状态存 localStorage */}
+        <button
+          type="button"
+          aria-label={muted ? "开启音效" : "静音"}
+          title={muted ? "开启音效" : "静音"}
+          onClick={toggleMuted}
+          className="absolute right-3 top-3 z-40 flex h-9 w-9 cursor-pointer items-center justify-center
+            rounded-full border border-[var(--color-border,rgba(217,180,106,0.25))] bg-black/25 text-base
+            backdrop-blur-sm transition hover:border-[var(--color-accent,#d9b46a)]/60 sm:right-4 sm:top-4"
+        >
+          {muted ? "🔇" : "🔊"}
+        </button>
+
         <div className="relative z-10 flex flex-col items-center pt-4 sm:pt-2">
           <motion.button
             type="button"

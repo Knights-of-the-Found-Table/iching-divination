@@ -23,6 +23,7 @@ import ShareCard from "@/components/divination/ShareCard";
 import {
   mockDivination, mockInterpretation, guestDivination, isMockMode, type MockDivinationResponse,
 } from "@/lib/mock";
+import { soundManager } from "@/lib/sounds";
 import { apiPost, apiGet } from "@/lib/api";
 
 /* =========================================================================
@@ -383,10 +384,12 @@ export default function DivinationPage() {
           });
       setResult(data);
       /* 先揭晓卦名（2.5s 停留 + 淡出），再进入判词阶段 */
+      soundManager.play("reveal", 0.9);
       setReveal({ name: data.hexagram.name, rarity: data.hexagram.rarity });
       await new Promise((r) => setTimeout(r, 2500));
       setReveal(null);
       await new Promise((r) => setTimeout(r, 450)); /* 等淡出动画结束 */
+      soundManager.play("judgment", 0.55);
       setPhase("judgment");
     } catch (e) {
       const raw = e instanceof Error ? e.message : "";
