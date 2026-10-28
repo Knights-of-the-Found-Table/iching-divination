@@ -21,6 +21,10 @@ import { Crown, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { apiGet } from "@/lib/api";
+import HexagramCollection, {
+  type CollectionRecord,
+} from "@/components/dashboard/HexagramCollection";
+import { isMockMode } from "@/lib/mock";
 
 /* =========================================================================
  * 类型定义
@@ -102,6 +106,77 @@ function getHexagramNames(hexagram: HistoryItem["hexagram"]): {
 }
 
 /* =========================================================================
+ * Mock 数据（NEXT_PUBLIC_MOCK_API=true 时启用，供收集册视觉验证）
+ * ========================================================================= */
+
+/** Mock 模式下的历史数据：覆盖 7 个不同卦象、共 8 条记录 */
+function buildMockHistory(): HistoryData {
+  const daysAgo = (d: number) =>
+    new Date(Date.now() - d * 86400000).toISOString();
+
+  const items: HistoryItem[] = [
+    {
+      id: "mock-1",
+      question: "近期事业走向如何？",
+      hexagram: { original: { name: "乾为天" }, transformed: null, rarity: "吉" },
+      judgment_cn: "元亨利贞。天行健，君子以自强不息。",
+      created_at: daysAgo(1),
+    },
+    {
+      id: "mock-2",
+      question: "这段感情该继续吗？",
+      hexagram: { original: { name: "地天泰" }, transformed: { name: "地风升" }, rarity: "大吉" },
+      judgment_cn: "小往大来，吉，亨。天地交而万物通也，上下交而其志同也。",
+      created_at: daysAgo(3),
+    },
+    {
+      id: "mock-3",
+      question: "是否要换工作？",
+      hexagram: { original: { name: "水雷屯" }, transformed: { name: "水地比" }, rarity: "中平" },
+      judgment_cn: "元亨利贞。勿用有攸往，利建侯。",
+      created_at: daysAgo(6),
+    },
+    {
+      id: "mock-4",
+      question: "家中琐事何时安顿？",
+      hexagram: { original: { name: "风火家人" }, transformed: null, rarity: "慎" },
+      judgment_cn: "利女贞。风自火出，家人。君子以言有物而行有恒。",
+      created_at: daysAgo(9),
+    },
+    {
+      id: "mock-5",
+      question: "考试能否通过？",
+      hexagram: { original: { name: "水火既济" }, transformed: { name: "风火家人" }, rarity: "吉" },
+      judgment_cn: "亨小，利贞。初吉终乱。",
+      created_at: daysAgo(14),
+    },
+    {
+      id: "mock-6",
+      question: "这笔投资可行吗？",
+      hexagram: { original: { name: "天地否" }, transformed: { name: "泽地萃" }, rarity: "大吉" },
+      judgment_cn: "否之匪人，不利君子贞。大往小来。",
+      created_at: daysAgo(20),
+    },
+    {
+      id: "mock-7",
+      question: "出行是否顺利？",
+      hexagram: { original: { name: "坤为地" }, transformed: null, rarity: "中平" },
+      judgment_cn: "元亨，利牝马之贞。地势坤，君子以厚德载物。",
+      created_at: daysAgo(28),
+    },
+    {
+      id: "mock-8",
+      question: "再问事业新机。",
+      hexagram: { original: { name: "乾为天" }, transformed: null, rarity: "吉" },
+      judgment_cn: "君子终日乾乾，夕惕若厉，无咎。",
+      created_at: daysAgo(35),
+    },
+  ];
+
+  return { items, total: items.length, page: 1, limit: 100 };
+}
+
+/* =========================================================================
  * 稀有度标签配置
  * ========================================================================= */
 
@@ -174,9 +249,20 @@ export default function DashboardPage() {
       setDataError(null);
 
       try {
+        /* Mock 模式：不请求后端，直接使用预置数据 */
+        if (isMockMode()) {
+          await new Promise((r) => setTimeout(r, 400));
+          if (!cancelled) {
+            setQuota({ remaining: 3, limit: 5, is_premium: false });
+            setHistory(buildMockHistory());
+          }
+          return;
+        }
+
+        /* 一次拉取最多 100 条（后端单页上限）：前 5 条用于最近列表，全量用于收集册 */
         const [quotaData, historyData] = await Promise.all([
           apiGet<QuotaData>("/api/user/quota"),
-          apiGet<HistoryData>("/api/divination?page=1&limit=5"),
+          apiGet<HistoryData>("/api/divination?page=1&limit=100"),
         ]);
 
         if (!cancelled) {
@@ -207,6 +293,18 @@ export default function DashboardPage() {
     logout();
     router.push("/");
   }
+
+  /* ── 收集册数据：从历史记录中提取本卦卦名 ── */
+  const collectionRecords: CollectionRecord[] = (history?.items ?? [])
+    .filter((item) => item.hexagram?.original?.name)
+    .map((item) => ({
+      id: item.id,
+      hexagramName: item.hexagram.original!.name!,
+      question: item.question,
+      judgment: item.judgment_cn,
+      rarity: item.hexagram?.rarity ?? "中平",
+      createdAt: item.created_at,
+    }));
 
   /* ── 加载态 ── */
   if (authLoading || !isLoggedIn) {
@@ -343,7 +441,7 @@ export default function DashboardPage() {
         {/* 占卜列表 */}
         {!dataLoading && !dataError && history && history.items.length > 0 && (
           <div className="space-y-3">
-            {history.items.map((item) => {
+            {history.items.slice(0, 5).map((item) => {
               const { original, changed } = getHexagramNames(item.hexagram);
               const rarity = item.hexagram?.rarity ?? "N";
               const rarityCfg = RARITY_CONFIG[rarity] ?? RARITY_CONFIG["慎"];
@@ -412,6 +510,18 @@ export default function DashboardPage() {
           </p>
         )}
       </motion.div>
+
+      {/* ── 卦象收集册 ── */}
+      {!dataLoading && !dataError && history && (
+        <motion.div
+          className="mt-10"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          <HexagramCollection records={collectionRecords} />
+        </motion.div>
+      )}
     </div>
   );
 }
